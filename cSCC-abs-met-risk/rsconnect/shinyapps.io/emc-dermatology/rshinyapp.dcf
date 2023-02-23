@@ -1,0 +1,11 @@
+name: rshinyapp
+title:
+username:
+account: emc-dermatology
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 8391899
+bundleId: 6878928
+url: https://emc-dermatology.shinyapps.io/rshinyapp/
+when: 1677157533.5166
+lastSyncTime: 1677157533.5166

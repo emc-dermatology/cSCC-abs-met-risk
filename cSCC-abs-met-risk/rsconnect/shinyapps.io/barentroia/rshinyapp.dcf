@@ -1,0 +1,11 @@
+name: rshinyapp
+title:
+username:
+account: barentroia
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 7230859
+bundleId: 6878914
+url: https://barentroia.shinyapps.io/rshinyapp/
+when: 1677157213.0635
+lastSyncTime: 1677157213.0635

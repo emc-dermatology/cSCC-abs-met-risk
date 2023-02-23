@@ -1,0 +1,11 @@
+name: cscc-abs-met-risk
+title:
+username:
+account: emc-dermatology
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 8391910
+bundleId: 6878935
+url: https://emc-dermatology.shinyapps.io/cscc-abs-met-risk/
+when: 1677157685.63279
+lastSyncTime: 1677157685.63279
