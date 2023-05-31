@@ -95,15 +95,15 @@ compute_perf_metrics_validation = function(ds_j,weights_j,model_estimate,b,df,pe
   
   if(perf_metric %in% c("AbRM","BWH")){
     # Observed and expected ratio # based on https://github.com/danielegiardiello/Prediction_performance_survival/blob/617603162e8fe31d121c99b5c533f053f7923cc4/03_predsurv_extended.md:
-    horizon = ifelse(horizon==3,2.95,horizon)
+    #horizon = ifelse(horizon==3,2.95,horizon)
     obj = summary(survfit(Surv(fu_metastasis_yrs, Metastasis_numeric) ~ 1, 
                           data = ds_j), 
-                  times = horizon)
+                  times = horizon,extend = TRUE)
     
     df[b,"OE"] = (1 - obj$surv) / (1-mean(model_estimate))
     wobj = summary(survfit(Surv(fu_metastasis_yrs, Metastasis_numeric) ~ 1, 
                            data = ds_j,weights=weights_j), 
-                   times = horizon)
+                   times = horizon,extend = TRUE)
     #print(1 - wobj$surv)
     df[b,"wOE"] = (1 - wobj$surv) / (1-weighted.mean(model_estimate,weights_j))
     
@@ -147,11 +147,21 @@ for(imp in c("cc","")){
     cdiffs_comparisons = cvars_comparisons = matrix(NA,ncol=multimp_cat$m,nrow=2)
     rownames(cdiffs_comparisons) = rownames(cvars_comparisons) = c("BWH_vs_ARM","AJCC_vs_ARM")
     
-    # Subset complete cases if requested:
-    i.incompletecase = is.na(DF_UK$diameter_num)|is.na(DF_UK$perineural_invasion)|is.na(DF_UK$tissue_involvement)|is.na(DF_UK$invasion_bone)|is.na(DF_UK$Differentiation_cat)
-    incompletepairs = DF_UK$setID[i.incompletecase] #This is needed for correct bootstrapping with pairs
-    i.incompletecase = i.incompletecase|as.character(DF_UK$setID)%in%as.character(incompletepairs) 
+    
+																																											 
+																										
+																								   
     if(imp =="cc"){
+      # Subset complete cases if requested:
+      i.incompletecase = is.na(DF_UK$diameter_num)|is.na(DF_UK$perineural_lymfo_bin)|is.na(DF_UK$tissue_involvement)|is.na(DF_UK$invasion_bone)|is.na(DF_UK$Differentiation_cat)
+      incompletepairs = as.character(DF_UK$setID[i.incompletecase]) #This is needed for correct bootstrapping with pairs
+      i.incompletecase = i.incompletecase|as.character(DF_UK$setID)%in%as.character(incompletepairs) # All pairs with at least one missing variable in either case or control are excluded from complete case analysis
+    }else if (imp =="no_wgh_outlier"){ #This case is not needed anymore because we replaced the control with an extremely high weight. 
+      set_id_outlying_weight = c(132,761,156,821)
+      i.incompletecase = as.character(DF_UK$setID)%in%as.character(set_id_outlying_weight) 
+    }
+    
+    if(imp %in% c("cc","no_wgh_outlier")){
       surv_probs = surv_probs[!i.incompletecase,]
       surv_probs_BWH = surv_probs_BWH[!i.incompletecase,]
     }
@@ -161,9 +171,15 @@ for(imp in c("cc","")){
       ds = complete(multimp_cat,m)
       
       #Subset dataset if we only want complete cases:
-      if(imp =="cc"){
+      if(imp %in% c("cc","no_wgh_outlier")){
+        total_nr_controls = sum(weights_vec[ds$mets=="Control"])
         ds = ds[!i.incompletecase,]
         weights_ds = weights_vec[!i.incompletecase]
+        #Adjust weights:
+        total_nr_cases = sum(DF_UK$mets=="Case")
+        complete_cases_nr = sum(ds$mets=="Case")
+        weights_ds[ds$mets=="Case"] = weights_ds[ds$mets=="Case"]*total_nr_cases/complete_cases_nr
+        weights_ds[ds$mets=="Control"] = weights_ds[ds$mets=="Control"]*total_nr_controls/sum(weights_ds[ds$mets=="Control"])
       }else{
         weights_ds = weights_vec
       }
@@ -256,6 +272,7 @@ for(imp in c("cc","")){
         set.seed(123)
         for(b in c(1:brep)){
           # bootstrap sample: note we sample based on pairs, not individual tumors
+          #j = sample(nrow(ds),replace=T) #this would be for individual tumors
           #Sample set ids
           set_ids_sampled = sample(unique(as.numeric(as.character(ds$setID))),replace=T)
           #Find indexes of sampled pairs
@@ -452,8 +469,15 @@ for( tm in timepoints){
       ds_dca = ds
       weights_ds = weights_vec
     }else if (imp=="cc"){
+      total_nr_controls = sum(weights_vec[ds$Metastasis=="Control"])
       ds_dca = ds[!i.incompletecase,]
       weights_ds = weights_vec[!i.incompletecase]
+
+      #Adjust weights:
+      total_nr_cases = sum(DF_UK$mets=="Case")
+      complete_cases_nr = sum(ds_dca$Metastasis=="Case")
+      weights_ds[ds_dca$Metastasis=="Case"] = weights_ds[ds_dca$Metastasis=="Case"]*total_nr_cases/complete_cases_nr
+      weights_ds[ds_dca$Metastasis=="Control"] = weights_ds[ds_dca$Metastasis=="Control"]*total_nr_controls/sum(weights_ds[ds_dca$Metastasis=="Control"])
     }
     
     ds_dca = truncateFUP(ds_dca,"Metastasis_numeric","fup_metastasis_years","Metastasis",tm)
