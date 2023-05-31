@@ -74,8 +74,38 @@ for (i in c(1:10)){
 }
 rownames(coefs_across_imp_datasets) = names(fit_cox_weighted$analyses[[i]]$coefficients)
 df=truncateFUP(dutch_ds,"Metastasis_numeric","Vitfup_metastasis_years","Metastasis",5)
-fit_complete_weighted  = coxph(Surv(df$Vitfup_metastasis_years,df$Metastasis_numeric)~ Age+Differentiation + Number_of_cSCC_before_culprit + PNI_or_LVI+Sex+Tissue_involvement+Tumor_diameter+Tumor_location_cats,df,weights = weights)
-coefs_across_imp_datasets[,"Complete"] = fit_complete_weighted$coefficients
+#Complete case analysis:
+for(analys in c("pure","after estimation of diameter with tumor width")){
+  # Identify complete pairs:
+  if(analys == "pure"){
+    complete_is = complete.cases(df[,c("Age","Differentiation","Number_of_cSCC_before_culprit", "PNI_or_LVI","Sex", "Tissue_involvement","Tumor_diameter","Tumor_location_cats")])
+  }else{
+    complete_is = complete.cases(df[,c("Age","Differentiation","Number_of_cSCC_before_culprit", "PNI_or_LVI","Sex", "Tissue_involvement","Tumor_diameter_factorized","Tumor_location_cats")])
+  }
+  complete_set_ids = names(table(df[complete_is,"Set_id"]))[which(table(df[complete_is,"Set_id"])==2)]
+  
+  # Obtain dataset with complete cases only:
+  df_complete = df
+  df_complete$weights = weights
+  if(analys == "after estimation of diameter with tumor width"){
+    df_complete$Tumor_diameter = df_complete$Tumor_diameter_factorized
+  }
+
+  df_complete = df_complete[df_complete$Set_id%in%complete_set_ids,]
+  df_complete$Number_of_cSCC_before_culprit = ifelse(df_complete$Number_of_cSCC_before_culprit>5,5,df_complete$Number_of_cSCC_before_culprit)
+  df_complete$Tumor_diameter = ifelse(df_complete$Tumor_diameter>4,4,df_complete$Tumor_diameter)
+  
+  # Adjust weights:
+  total_nr_cases = sum(dutch_ds$Metastasis_numeric)
+  complete_cases_nr = length(complete_set_ids)
+  df_complete$weights[df_complete$Metastasis=="Case"] = df_complete$weights[df_complete$Metastasis=="Case"]*total_nr_cases/complete_cases_nr
+  df_complete$weights[df_complete$Metastasis=="Control"] = df_complete$weights[df_complete$Metastasis=="Control"]*(12203-195)/sum(df_complete$weights[df_complete$Metastasis=="Control"])
+  
+  # Fit weighted cox:
+  fit_complete_weighted  = coxph(Surv(df_complete$Vitfup_metastasis_years,df_complete$Metastasis_numeric)~ Age+Differentiation + Number_of_cSCC_before_culprit + PNI_or_LVI+Sex+Tissue_involvement+Tumor_diameter+Tumor_location_cats,df_complete,weights = df_complete$weights)
+  coefs_across_imp_datasets[,paste0("Complete",analys)] = fit_complete_weighted$coefficients
+  
+}						
 write.csv(round(exp(coefs_across_imp_datasets),3),paste0(dir_results,script_id,"_wghcox_model_all_imp",ds_id,".csv"))
 
 # 3. Evaluation Final Model
