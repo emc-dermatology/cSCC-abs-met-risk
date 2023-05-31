@@ -119,6 +119,7 @@ pids_mets_baseline =as.character(DF_UK$pid[cases_with_metastasis_at_baseline])
 
 # Exclude controls with data problems:
 exc_patients= c(636233,768354,955768)# These patients must be excluded because there is a data quality concern about the follow up (636233,768354).
+exc_patients= c(exc_patients,229967) #This control has an extremely low follow up times (18 days), which leads to a disproportionately high weight, which affected the robustness of the analysis. We therefore have decided to exclude it.
 
 DF_UK_excluded = DF_UK %>%filter(as.character(setID)%in%set_ids_mets_baseline|pid%in%exc_patients)%>%as.data.frame()
 set_ids_exclude = as.character(DF_UK$setID[cases_with_metastasis_at_baseline])
@@ -163,11 +164,12 @@ DF_UK_excluded_controls = rbind(DF_UK_excluded_controls,controls_without_a_pair)
 DF_UK =DF_UK %>% filter(!setID %in%controls_without_a_pair$setID)%>%as.data.frame()
 
 # Rescue some controls back into the NCC dataset, by matching again on follow up. 
+set.seed(123) #guarantee same sampling								  
 for (set_id in set_ids_replace_control){
   case_fup = DF_UK[which(DF_UK$setID==set_id),"fu_metastasis_yrs"]
   control_could_be_rescued = DF_UK_excluded_controls[which(DF_UK_excluded_controls$fu_metastasis_yrs>case_fup),]
   if(nrow(control_could_be_rescued)>0){
-    rescued_control = control_could_be_rescued[which.min(control_could_be_rescued$fu_metastasis_yrs),]
+    rescued_control = control_could_be_rescued[sample(1:length(control_could_be_rescued$fu_metastasis_yrs),1),]
     rescued_control[,"setID"] = set_id
     DF_UK = rbind(DF_UK,rescued_control)
     DF_UK_excluded_controls = DF_UK_excluded_controls %>%filter(!pid %in%rescued_control[["pid"]]) %>%as.data.frame()
@@ -267,9 +269,28 @@ weights_UK$sampling_prob[which(weights_UK$mets=="Control")]=1-weights_UK$samplin
 weights_UK$weights = 1/weights_UK$sampling_prob
 weights_UK$fup = uk_fullcohort$metsfreesurv[match(weights_UK$anonpid,uk_fullcohort$anonpid)]
 
-nr_mets_baseline = length(intersect(which(uk_fullcohort$mets==1),which(uk_fullcohort$metsfreesurv==0)))
-total_potential_mets = length(unique(uk_fullcohort$anonpid))-nr_mets_baseline
-weights_UK$weights_rescaled = weights_UK$weights*total_potential_mets/sum(weights_UK$weights) # Rescaling so that the sum of the weights is equal to the total number of patients that can develop a metastasis.
+#nr_mets_baseline = length(intersect(which(uk_fullcohort$mets==1),which(uk_fullcohort$metsfreesurv==0)))
+#total_potential_mets = length(unique(uk_fullcohort$anonpid))-nr_mets_baseline
+#weights_UK$weights_rescaled = weights_UK$weights*total_potential_mets/sum(weights_UK$weights) # Rescaling so that the sum of the weights is equal to the total number of patients that can develop a metastasis.
+# We investigated whether outlying weightsshould be truncated, but we have realised that this is a bad choice, because results are too sensitive to the truncation threshold.
+#if(weight_scheme == "2013_diag" & any(weights_UK$weights>5000)){
+#  weights_UK$weights[which(weights_UK$weights>5000)]=5000
+#}
+  
+total_no_mets = length(unique(uk_fullcohort$anonpid))-length(which(uk_fullcohort$mets==1))
+weights_UK$weights_rescaled = weights_UK$weights
+weights_UK$weights_rescaled[weights_UK$mets=="Control"] = weights_UK$weights[weights_UK$mets=="Control"]*total_no_mets/sum(weights_UK$weights[weights_UK$mets=="Control"]) # Rescaling so that the sum of the weights is equal to the total number of patients that can develop a metastasis.
+
+# Check what the logistic regression weights would be:
+samplestat = uk_fullcohort$mets
+samplestat[uk_fullcohort$mets==0 & uk_fullcohort$anonpid%in%DF_UK$pid] = 1
+uk_fullcohort$samplestat = samplestat
+glm_prob = glm(samplestat~metsfreesurv,family=binomial,data = uk_fullcohort[uk_fullcohort$mets==0,])$fitted
+df_logreg = cbind(uk_fullcohort[uk_fullcohort$mets==0,],glm_prob)
+
+weights_UK$logreg_weights = weights_UK$weights_rescaled
+weights_UK$logreg_weights[weights_UK$mets=="Control"] = 1/df_logreg$glm_prob[setdiff(match(weights_UK$anonpid,df_logreg$anonpid),NA)]
+
 
 # Sanity check: weights should increase with decreasing follow up time
 plot(weights_UK$weights_rescaled[which(weights_UK$mets=="Control")],weights_UK$fup[which(weights_UK$mets=="Control")],xlab="Rescaled weights",ylab="Follow up time (days)")
