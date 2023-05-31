@@ -13,18 +13,16 @@ weighted_scaled_brier = function (obs,pred,weights=NULL){
 calib_plot =function(predictions,outcome_num,outcome_FUP,ds,u,bin_nr,lim,pl,outcome_type,weights=NULL,md,log.calib=TRUE,smooth=TRUE,log_plot=FALSE,main_plot="",surv_or_met = "surv",new_plot = TRUE,dots_col = "darkred"){
   
   #Truncate outcome at u time
-  outcome_num_u = outcome_num
   i.greaterFUP = which(outcome_FUP>u)
   if(length(i.greaterFUP)>0){
-    outcome_num_u[outcome_FUP>u]=0
+    outcome_num[outcome_FUP>u]=0
   }
   
-  outcome_num_u = ifelse(outcome_num_u==1,0,1)
+  outcome_num_u = ifelse(outcome_num==1,0,1)
   if(length(i.greaterFUP)>0){
     outcome_FUP[outcome_FUP>u] = u
   }
-  # TODO: there is a bug with the truncation that needs to be fixed.
-  
+
   # Get calibration slope:
   logit <- qlogis(predictions)
   i <- ! is.infinite(logit)
@@ -124,7 +122,17 @@ calib_plot =function(predictions,outcome_num,outcome_FUP,ds,u,bin_nr,lim,pl,outc
     pred.prob <- plogis(pred.prob)
     
     # Partition data
-    bin <- cut2(predictions,m=bin_nr,levels.mean=TRUE,digits=7)
+    #bin <- cut2(predictions,m=bin_nr,levels.mean=TRUE,digits=7)
+    if(is.null(weights)){
+      bin <- cut2(predictions,m=bin_nr,levels.mean=TRUE,digits=7)
+    }else{
+      nr_percentiles <-floor(length(predictions)/bin_nr)
+      bin <- cut2(seq(0.0001,1,0.0001),m=10000/nr_percentiles,levels.mean=TRUE,digits=2) #obtain the desired percentiles
+      pct_bin <-round(as.numeric(levels(bin))+as.numeric(levels(bin))[1],2)
+      upper_bond_qnt <- as.numeric(wtd.quantile(predictions,w=weights,probs=c(pct_bin)))
+      bin<-cut2(predictions,unique(c(0,round(upper_bond_qnt,5))),levels.mean=TRUE) #note: we have to use unique command, otherwise the cut2 function doesnt work when the percentiles are repeated.
+    } 
+    
     means <- as.numeric(levels(bin))
     
     if (outcome_type=="survival"){
@@ -143,14 +151,15 @@ calib_plot =function(predictions,outcome_num,outcome_FUP,ds,u,bin_nr,lim,pl,outc
         s <- q==i
         nobs <- sum(s); ne <- sum(outcome_num[s])
         
-        pred[i] <- mean(predictions[s], na.rm=TRUE) #mean predictions of each group
         dummystrat <- as.factor(rep("1", nobs))
+        
         if(is.null(weights)){
-          #f <- survfitKM(dummystrat,Srv[s,]) 
           f = survfit(Srv[s,] ~ 1)
+          pred[i] <- mean(predictions[s], na.rm=TRUE) #mean of predictions of each group
+                
         }else{
           f = survfit(Srv[s,] ~ 1,weights =weights[s])
-          #f <- survfitKM(dummystrat,Srv[s,],weights = weights[s]) 
+          pred[i] <- weighted.mean(predictions[s],w = weights[s], na.rm=TRUE) #mean of predictions of each group
         }
         
         #Note: if last u> last time, we take the estimates at the last time point:
@@ -199,7 +208,7 @@ calib_plot =function(predictions,outcome_num,outcome_FUP,ds,u,bin_nr,lim,pl,outc
           errbar(1-pred, 1-km, 1-hi, 1-low, add=TRUE)
          }else{
 
-             errbar(pred, km, hi, low, add=TRUE)
+          errbar(pred, km, hi, low, add=TRUE)
 
           
            
@@ -220,14 +229,9 @@ calib_plot =function(predictions,outcome_num,outcome_FUP,ds,u,bin_nr,lim,pl,outc
     }
     
     if(log_plot|(surv_or_met =="met")){
-      points(1-means, 1-prop, pch=16,col=dots_col)
-      
+      points(1-pred, 1-prop, pch=16,col=dots_col)
     }else{
-
-        points(means, prop, pch=16,col=dots_col)
-      
-      
-    
+      points(pred, prop, pch=16,col=dots_col)
     }
     #lines(means, prop,col="darkred"); lt <- c(lt, 1)
     leg <- c(leg, "Grouped observations")
@@ -246,9 +250,7 @@ calib_plot =function(predictions,outcome_num,outcome_FUP,ds,u,bin_nr,lim,pl,outc
     if(log_plot|(surv_or_met =="met")){
       x<-1-predictions
     }else{
-        x<-predictions
-
-      
+      x<-predictions
     }
    
     bins <- seq(lim[1], lim[2], length=101)
