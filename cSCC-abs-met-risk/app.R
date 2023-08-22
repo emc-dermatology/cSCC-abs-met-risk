@@ -7,7 +7,7 @@
 
 
 # Load packages ----
-library(shiny)
+#library(shiny)
 
 # Source helpers ----
 # function to compute the linear predictor of the model, based on the patient and tumor characteristics provided by the user.
@@ -75,7 +75,7 @@ ui <- fluidPage(
   titlePanel(
     fluidRow(
       column(10, "Prediction of metastatic risk in patients with cutaneous squamous cell carcinoma (cSCC)",    
-             h4("This web-based calculator has been developed by the Skin Cancer Research Group of the Department of Dermatology at the Erasmus MC Cancer Institute in Rotterdam, and validated in an external cohort of cSCC patients, as described in this publication [Add link]."),
+             h4("This web-based calculator has been developed by the Skin Cancer Research Group of the Department of Dermatology at the Erasmus MC Cancer Institute in Rotterdam, and validated in an external cohort of cSCC patients, as described in ",a("Rentroia-Pacheco et al (2023)",href = "https://www.thelancet.com/journals/eclinm/article/PIIS2589-5370(23)00327-9/fulltext"),"."),
              h4("This model has only been developed and validated in cSCC and not in mucosal or genital SCC."),
       ),       column(2, img(height = 80, width = 170,src='EMC_Cinst_logo.png', align = "right"))),
     windowTitle = "EMC cSCC absolute risk model"),
